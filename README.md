@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Hệ Thống Quản Lý Lương Nhân Viên
 
 Ứng dụng web được xây dựng bằng Next.js và Supabase để quản lý và tra cứu thông tin lương nhân viên.
@@ -145,3 +146,6 @@ Nếu gặp vấn đề, vui lòng:
 ## License
 
 MIT License - xem file LICENSE để biết thêm chi tiết.
+=======
+# LuongHoaTho
+>>>>>>> 4c11691e1054c2b3a915a650c99eb747e2e153e1
