@@ -9,11 +9,11 @@
     "start": "next start"
   },
   "dependencies": {
-    "@radix-ui/react-label": "1.0.2",
-    "@radix-ui/react-separator": "1.0.2",
-    "@radix-ui/react-sheet": "1.0.2",
-    "@radix-ui/react-slot": "1.0.2",
-    "@radix-ui/react-tooltip": "1.0.2",
+    "@radix-ui/react-label": "^2.1.7",
+    "@radix-ui/react-separator": "^2.1.7",
+    "@radix-ui/react-sheet": "^2.1.7",
+    "@radix-ui/react-slot": "^2.1.7",
+    "@radix-ui/react-tooltip": "^2.1.7",
     "@supabase/ssr": "latest",
     "@supabase/supabase-js": "^2.45.4",
     "bcryptjs": "latest",
