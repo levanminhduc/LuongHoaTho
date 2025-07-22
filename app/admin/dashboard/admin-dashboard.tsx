@@ -12,6 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
 import { Loader2, Upload, FileSpreadsheet, Users, DollarSign, LogOut, RefreshCw, Download } from "lucide-react"
+import { EmployeeImportSection } from "@/components/employee-import-section"
 
 interface PayrollRecord {
   id: number
@@ -309,7 +310,7 @@ export function AdminDashboard() {
                     variant="outline"
                     onClick={handleDownloadSample}
                     disabled={downloadingSample}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 bg-transparent"
                   >
                     {downloadingSample ? (
                       <>
@@ -328,7 +329,7 @@ export function AdminDashboard() {
                     variant="outline"
                     onClick={handleDownloadMultipleSamples}
                     disabled={downloadingMultiple}
-                    className="flex items-center gap-2"
+                    className="flex items-center gap-2 bg-transparent"
                   >
                     {downloadingMultiple ? (
                       <>
@@ -347,6 +348,11 @@ export function AdminDashboard() {
             </div>
           </CardContent>
         </Card>
+
+        {/* Employee Import Section */}
+        <div className="mb-8">
+          <EmployeeImportSection />
+        </div>
 
         {/* Payroll Data Table */}
         <Card>
