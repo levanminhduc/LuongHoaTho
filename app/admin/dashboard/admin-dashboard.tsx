@@ -20,7 +20,10 @@ import {
   Settings,
 } from "lucide-react"
 import { EmployeeImportSection } from "@/components/employee-import-section"
-import { AdvancedSalaryImport } from "@/components/advanced-salary-import"
+// Replace this import
+// import { AdvancedSalaryImport } from "@/components/advanced-salary-import"
+// With this import
+import { DualFileImportSection } from "@/components/dual-file-import-section"
 import type { ImportResult } from "@/lib/advanced-excel-parser"
 
 interface PayrollRecord {
@@ -271,7 +274,7 @@ export function AdminDashboard() {
 
           {/* Advanced Import Tab */}
           <TabsContent value="advanced-import" className="space-y-6">
-            <AdvancedSalaryImport onImportComplete={handleImportComplete} />
+            <DualFileImportSection />
           </TabsContent>
 
           {/* Employee Import Tab */}
