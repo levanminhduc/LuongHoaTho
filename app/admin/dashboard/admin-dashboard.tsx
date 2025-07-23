@@ -1,63 +1,78 @@
 "use client"
 
-import type React from "react"
-
 import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Alert, AlertDescription } from "@/components/ui/alert"
 import { Badge } from "@/components/ui/badge"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table"
-import { Loader2, Upload, FileSpreadsheet, Users, DollarSign, LogOut, RefreshCw, Download } from "lucide-react"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
+import {
+  Loader2,
+  LogOut,
+  RefreshCw,
+  Database,
+  FileSpreadsheet,
+  Users,
+  DollarSign,
+  TrendingUp,
+  Settings,
+} from "lucide-react"
 import { EmployeeImportSection } from "@/components/employee-import-section"
+import { AdvancedSalaryImport } from "@/components/advanced-salary-import"
+import type { ImportResult } from "@/lib/advanced-excel-parser"
 
 interface PayrollRecord {
   id: number
   employee_id: string
-  full_name: string
-  cccd: string
-  position: string
   salary_month: string
-  total_income: number
-  deductions: number
-  net_salary: number
+  tien_luong_thuc_nhan_cuoi_ky: number
   source_file: string
   created_at: string
+  import_batch_id: string
+  import_status: string
+}
+
+interface DashboardStats {
+  totalRecords: number
+  totalEmployees: number
+  totalSalary: number
+  currentMonth: string
+  lastImportBatch: string
+  signatureRate: number
 }
 
 export function AdminDashboard() {
-  const [files, setFiles] = useState<FileList | null>(null)
-  const [uploading, setUploading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [payrolls, setPayrolls] = useState<PayrollRecord[]>([])
-  const [uploadMessage, setUploadMessage] = useState("")
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardStats>({
     totalRecords: 0,
     totalEmployees: 0,
     totalSalary: 0,
+    currentMonth: "",
+    lastImportBatch: "",
+    signatureRate: 0,
   })
-  const [downloadingSample, setDownloadingSample] = useState(false)
-  const [downloadingMultiple, setDownloadingMultiple] = useState(false)
+  const [downloadingSyncTemplate, setDownloadingSyncTemplate] = useState(false)
+  const [message, setMessage] = useState("")
   const router = useRouter()
 
   useEffect(() => {
-    // Kiểm tra authentication
+    // Check authentication
     const token = localStorage.getItem("admin_token")
     if (!token) {
       router.push("/admin/login")
       return
     }
 
-    fetchPayrolls()
+    fetchDashboardData()
   }, [router])
 
-  const fetchPayrolls = async () => {
+  const fetchDashboardData = async () => {
     try {
       const token = localStorage.getItem("admin_token")
-      const response = await fetch("/api/admin/payrolls", {
+      const response = await fetch("/api/admin/dashboard-stats", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
@@ -65,61 +80,55 @@ export function AdminDashboard() {
 
       if (response.ok) {
         const data = await response.json()
-        setPayrolls(data.payrolls)
-        setStats(data.stats)
+        setPayrolls(data.payrolls || [])
+        setStats(data.stats || {})
       } else if (response.status === 401) {
         localStorage.removeItem("admin_token")
         router.push("/admin/login")
       }
     } catch (error) {
-      console.error("Error fetching payrolls:", error)
+      console.error("Error fetching dashboard data:", error)
+      setMessage("Lỗi khi tải dữ liệu dashboard")
     } finally {
       setLoading(false)
     }
   }
 
-  const handleFileUpload = async (e: React.FormEvent) => {
-    e.preventDefault()
-    if (!files || files.length === 0) {
-      setUploadMessage("Vui lòng chọn ít nhất một file Excel")
-      return
-    }
-
-    setUploading(true)
-    setUploadMessage("")
-
+  const handleDownloadSyncTemplate = async () => {
+    setDownloadingSyncTemplate(true)
     try {
-      const formData = new FormData()
-      Array.from(files).forEach((file, index) => {
-        formData.append(`file${index}`, file)
-      })
-
       const token = localStorage.getItem("admin_token")
-      const response = await fetch("/api/admin/upload", {
-        method: "POST",
+      const response = await fetch("/api/admin/sync-template", {
         headers: {
           Authorization: `Bearer ${token}`,
         },
-        body: formData,
       })
 
-      const data = await response.json()
-
       if (response.ok) {
-        setUploadMessage(`Thành công! Đã import ${data.totalRecords} bản ghi từ ${data.filesProcessed} file(s)`)
-        fetchPayrolls() // Refresh data
-        setFiles(null)
-        // Reset file input
-        const fileInput = document.getElementById("files") as HTMLInputElement
-        if (fileInput) fileInput.value = ""
+        const blob = await response.blob()
+        const url = window.URL.createObjectURL(blob)
+        const a = document.createElement("a")
+        a.href = url
+        a.download = `template-luong-dong-bo-${new Date().toISOString().substr(0, 10)}.xlsx`
+        document.body.appendChild(a)
+        a.click()
+        window.URL.revokeObjectURL(url)
+        document.body.removeChild(a)
+        setMessage("Đã tải template đồng bộ thành công!")
       } else {
-        setUploadMessage(`Lỗi: ${data.error}`)
+        setMessage("Lỗi khi tải template đồng bộ")
       }
     } catch (error) {
-      setUploadMessage("Có lỗi xảy ra khi upload file")
+      setMessage("Có lỗi xảy ra khi tải template đồng bộ")
     } finally {
-      setUploading(false)
+      setDownloadingSyncTemplate(false)
     }
+  }
+
+  const handleImportComplete = (result: ImportResult) => {
+    // Refresh dashboard data after successful import
+    fetchDashboardData()
+    setMessage(`Import hoàn tất! Xử lý ${result.successCount}/${result.totalRows} bản ghi thành công`)
   }
 
   const handleLogout = () => {
@@ -134,64 +143,8 @@ export function AdminDashboard() {
     }).format(amount)
   }
 
-  const handleDownloadSample = async () => {
-    setDownloadingSample(true)
-    try {
-      const token = localStorage.getItem("admin_token")
-      const response = await fetch("/api/admin/download-sample", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = "bang-luong-mau.xlsx"
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-      } else {
-        setUploadMessage("Lỗi khi tải file mẫu")
-      }
-    } catch (error) {
-      setUploadMessage("Có lỗi xảy ra khi tải file mẫu")
-    } finally {
-      setDownloadingSample(false)
-    }
-  }
-
-  const handleDownloadMultipleSamples = async () => {
-    setDownloadingMultiple(true)
-    try {
-      const token = localStorage.getItem("admin_token")
-      const response = await fetch("/api/admin/download-multiple-samples", {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      })
-
-      if (response.ok) {
-        const blob = await response.blob()
-        const url = window.URL.createObjectURL(blob)
-        const a = document.createElement("a")
-        a.href = url
-        a.download = "bang-luong-mau-files.zip"
-        document.body.appendChild(a)
-        a.click()
-        window.URL.revokeObjectURL(url)
-        document.body.removeChild(a)
-      } else {
-        setUploadMessage("Lỗi khi tải file mẫu")
-      }
-    } catch (error) {
-      setUploadMessage("Có lỗi xảy ra khi tải file mẫu")
-    } finally {
-      setDownloadingMultiple(false)
-    }
+  const formatDate = (dateString: string) => {
+    return new Date(dateString).toLocaleDateString("vi-VN")
   }
 
   if (loading) {
@@ -208,207 +161,247 @@ export function AdminDashboard() {
       <div className="bg-white shadow-sm border-b">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex justify-between items-center py-4">
-            <h1 className="text-2xl font-bold text-gray-900">Dashboard - Hòa Thọ Điện Bàn</h1>
-            <Button variant="outline" onClick={handleLogout}>
-              <LogOut className="w-4 h-4 mr-2" />
-              Đăng Xuất
-            </Button>
+            <div>
+              <h1 className="text-2xl font-bold text-gray-900">Dashboard Quản Trị</h1>
+              <p className="text-sm text-gray-600">MAY HÒA THỌ ĐIỆN BÀN - Hệ thống quản lý lương nâng cao</p>
+            </div>
+            <div className="flex items-center gap-3">
+              <Button
+                variant="outline"
+                onClick={handleDownloadSyncTemplate}
+                disabled={downloadingSyncTemplate}
+                className="flex items-center gap-2 bg-transparent"
+              >
+                {downloadingSyncTemplate ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Đang tạo...
+                  </>
+                ) : (
+                  <>
+                    <Database className="h-4 w-4" />
+                    Template Đồng Bộ
+                  </>
+                )}
+              </Button>
+              <Button variant="outline" onClick={handleLogout}>
+                <LogOut className="w-4 h-4 mr-2" />
+                Đăng Xuất
+              </Button>
+            </div>
           </div>
         </div>
       </div>
 
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
-          <Card>
+        {/* Status Message */}
+        {message && (
+          <Alert className="mb-6 border-blue-200 bg-blue-50">
+            <AlertDescription className="text-blue-800">{message}</AlertDescription>
+          </Alert>
+        )}
+
+        {/* Enhanced Stats Cards */}
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+          <Card className="bg-gradient-to-r from-blue-500 to-blue-600 text-white">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tổng Bản Ghi</CardTitle>
-              <FileSpreadsheet className="h-4 w-4 text-muted-foreground" />
+              <FileSpreadsheet className="h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalRecords}</div>
+              <p className="text-xs text-blue-100">Batch: {stats.lastImportBatch}</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-gradient-to-r from-green-500 to-green-600 text-white">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Số Nhân Viên</CardTitle>
-              <Users className="h-4 w-4 text-muted-foreground" />
+              <Users className="h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{stats.totalEmployees}</div>
+              <p className="text-xs text-green-100">Tháng: {stats.currentMonth}</p>
             </CardContent>
           </Card>
 
-          <Card>
+          <Card className="bg-gradient-to-r from-purple-500 to-purple-600 text-white">
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Tổng Lương</CardTitle>
-              <DollarSign className="h-4 w-4 text-muted-foreground" />
+              <DollarSign className="h-4 w-4" />
             </CardHeader>
             <CardContent>
               <div className="text-2xl font-bold">{formatCurrency(stats.totalSalary)}</div>
+              <p className="text-xs text-purple-100">Thực nhận</p>
+            </CardContent>
+          </Card>
+
+          <Card className="bg-gradient-to-r from-orange-500 to-orange-600 text-white">
+            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+              <CardTitle className="text-sm font-medium">Tỷ Lệ Ký</CardTitle>
+              <TrendingUp className="h-4 w-4" />
+            </CardHeader>
+            <CardContent>
+              <div className="text-2xl font-bold">{stats.signatureRate.toFixed(1)}%</div>
+              <p className="text-xs text-orange-100">Đã ký nhận</p>
             </CardContent>
           </Card>
         </div>
 
-        {/* Upload Section */}
-        <Card className="mb-8">
-          <CardHeader>
-            <CardTitle>Upload File Excel</CardTitle>
-            <CardDescription>Chọn một hoặc nhiều file Excel chứa dữ liệu lương để import vào hệ thống</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleFileUpload} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="files">Chọn File Excel (.xlsx, .xls)</Label>
-                <Input
-                  id="files"
-                  type="file"
-                  multiple
-                  accept=".xlsx,.xls"
-                  onChange={(e) => setFiles(e.target.files)}
-                  className="file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100"
-                />
-              </div>
+        {/* Main Content Tabs */}
+        <Tabs defaultValue="advanced-import" className="space-y-6">
+          <TabsList className="grid w-full grid-cols-4">
+            <TabsTrigger value="advanced-import" className="flex items-center gap-2">
+              <Settings className="h-4 w-4" />
+              Import Nâng Cao
+            </TabsTrigger>
+            <TabsTrigger value="employee-import" className="flex items-center gap-2">
+              <Users className="h-4 w-4" />
+              Import Nhân Viên
+            </TabsTrigger>
+            <TabsTrigger value="data-overview" className="flex items-center gap-2">
+              <Database className="h-4 w-4" />
+              Tổng Quan Dữ Liệu
+            </TabsTrigger>
+            <TabsTrigger value="reports" className="flex items-center gap-2">
+              <FileSpreadsheet className="h-4 w-4" />
+              Báo Cáo
+            </TabsTrigger>
+          </TabsList>
 
-              {uploadMessage && (
-                <Alert
-                  className={
-                    uploadMessage.includes("Thành công") ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"
-                  }
-                >
-                  <AlertDescription
-                    className={uploadMessage.includes("Thành công") ? "text-green-800" : "text-red-800"}
-                  >
-                    {uploadMessage}
-                  </AlertDescription>
-                </Alert>
-              )}
+          {/* Advanced Import Tab */}
+          <TabsContent value="advanced-import" className="space-y-6">
+            <AdvancedSalaryImport onImportComplete={handleImportComplete} />
+          </TabsContent>
 
-              <Button type="submit" disabled={uploading || !files}>
-                {uploading ? (
-                  <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Đang Upload...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="mr-2 h-4 w-4" />
-                    Upload Files
-                  </>
-                )}
-              </Button>
-            </form>
-            <div className="mt-4 pt-4 border-t">
-              <div className="flex items-center justify-between">
+          {/* Employee Import Tab */}
+          <TabsContent value="employee-import" className="space-y-6">
+            <EmployeeImportSection />
+          </TabsContent>
+
+          {/* Data Overview Tab */}
+          <TabsContent value="data-overview" className="space-y-6">
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between">
                 <div>
-                  <h4 className="text-sm font-medium text-gray-900">File Excel Mẫu</h4>
-                  <p className="text-sm text-gray-500">Tải xuống file mẫu để tham khảo định dạng dữ liệu</p>
+                  <CardTitle>Dữ Liệu Lương Gần Đây</CardTitle>
+                  <CardDescription>Danh sách bản ghi lương được import gần đây</CardDescription>
                 </div>
-                <div className="flex gap-2">
-                  <Button
-                    variant="outline"
-                    onClick={handleDownloadSample}
-                    disabled={downloadingSample}
-                    className="flex items-center gap-2 bg-transparent"
-                  >
-                    {downloadingSample ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Đang tạo...
-                      </>
-                    ) : (
-                      <>
-                        <Download className="w-4 h-4" />
-                        File Đơn
-                      </>
-                    )}
-                  </Button>
+                <Button variant="outline" onClick={fetchDashboardData}>
+                  <RefreshCw className="w-4 h-4 mr-2" />
+                  Làm Mới
+                </Button>
+              </CardHeader>
+              <CardContent>
+                <div className="overflow-x-auto">
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Mã NV</TableHead>
+                        <TableHead>Tháng Lương</TableHead>
+                        <TableHead>Lương Thực Nhận</TableHead>
+                        <TableHead>Batch ID</TableHead>
+                        <TableHead>Trạng Thái</TableHead>
+                        <TableHead>Ngày Tạo</TableHead>
+                        <TableHead>File Nguồn</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {payrolls.map((record) => (
+                        <TableRow key={record.id}>
+                          <TableCell className="font-medium">{record.employee_id}</TableCell>
+                          <TableCell>
+                            <Badge variant="outline">{record.salary_month}</Badge>
+                          </TableCell>
+                          <TableCell className="font-semibold">
+                            {formatCurrency(record.tien_luong_thuc_nhan_cuoi_ky)}
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">
+                            {record.import_batch_id?.slice(-8) || "N/A"}
+                          </TableCell>
+                          <TableCell>
+                            <Badge variant={record.import_status === "signed" ? "default" : "secondary"}>
+                              {record.import_status === "signed" ? "Đã ký" : "Chưa ký"}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="text-sm text-gray-600">{formatDate(record.created_at)}</TableCell>
+                          <TableCell className="text-sm text-gray-500 truncate max-w-[200px]">
+                            {record.source_file}
+                          </TableCell>
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
 
-                  <Button
-                    variant="outline"
-                    onClick={handleDownloadMultipleSamples}
-                    disabled={downloadingMultiple}
-                    className="flex items-center gap-2 bg-transparent"
-                  >
-                    {downloadingMultiple ? (
-                      <>
-                        <Loader2 className="w-4 h-4 animate-spin" />
-                        Đang tạo...
-                      </>
-                    ) : (
-                      <>
-                        <FileSpreadsheet className="w-4 h-4" />
-                        Nhiều File
-                      </>
-                    )}
-                  </Button>
+                  {payrolls.length === 0 && (
+                    <div className="text-center py-8 text-gray-500">
+                      Chưa có dữ liệu lương nào. Hãy sử dụng tính năng import để bắt đầu.
+                    </div>
+                  )}
                 </div>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
+              </CardContent>
+            </Card>
+          </TabsContent>
 
-        {/* Employee Import Section */}
-        <div className="mb-8">
-          <EmployeeImportSection />
-        </div>
+          {/* Reports Tab */}
+          <TabsContent value="reports" className="space-y-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>Báo Cáo Tổng Quan</CardTitle>
+                  <CardDescription>Thống kê tổng quan hệ thống</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Tổng số bản ghi lương:</span>
+                      <span className="font-semibold">{stats.totalRecords}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Tổng số nhân viên:</span>
+                      <span className="font-semibold">{stats.totalEmployees}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Tổng lương thực nhận:</span>
+                      <span className="font-semibold">{formatCurrency(stats.totalSalary)}</span>
+                    </div>
+                    <div className="flex justify-between items-center">
+                      <span className="text-sm text-gray-600">Tỷ lệ ký nhận:</span>
+                      <span className="font-semibold">{stats.signatureRate.toFixed(1)}%</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
 
-        {/* Payroll Data Table */}
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between">
-            <div>
-              <CardTitle>Dữ Liệu Lương</CardTitle>
-              <CardDescription>Danh sách tất cả bản ghi lương đã được import</CardDescription>
+              <Card>
+                <CardHeader>
+                  <CardTitle>Hướng Dẫn Sử Dụng</CardTitle>
+                  <CardDescription>Các tính năng chính của hệ thống</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    <div className="flex items-center gap-3">
+                      <Settings className="h-4 w-4 text-blue-600" />
+                      <span className="text-sm">Import Nâng Cao: Cấu hình ánh xạ cột linh hoạt</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Users className="h-4 w-4 text-green-600" />
+                      <span className="text-sm">Import Nhân Viên: Quản lý danh sách nhân viên</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Database className="h-4 w-4 text-purple-600" />
+                      <span className="text-sm">Template Đồng Bộ: Tạo template từ dữ liệu hiện tại</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <FileSpreadsheet className="h-4 w-4 text-orange-600" />
+                      <span className="text-sm">Báo Cáo: Thống kê và phân tích dữ liệu</span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
             </div>
-            <Button variant="outline" onClick={fetchPayrolls}>
-              <RefreshCw className="w-4 h-4 mr-2" />
-              Làm Mới
-            </Button>
-          </CardHeader>
-          <CardContent>
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Mã NV</TableHead>
-                    <TableHead>Họ Tên</TableHead>
-                    <TableHead>CCCD</TableHead>
-                    <TableHead>Chức Vụ</TableHead>
-                    <TableHead>Tháng Lương</TableHead>
-                    <TableHead>Thu Nhập</TableHead>
-                    <TableHead>Khấu Trừ</TableHead>
-                    <TableHead>Thực Lĩnh</TableHead>
-                    <TableHead>File Nguồn</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {payrolls.map((record) => (
-                    <TableRow key={record.id}>
-                      <TableCell className="font-medium">{record.employee_id}</TableCell>
-                      <TableCell>{record.full_name}</TableCell>
-                      <TableCell>{record.cccd}</TableCell>
-                      <TableCell>{record.position || "-"}</TableCell>
-                      <TableCell>
-                        <Badge variant="outline">{record.salary_month}</Badge>
-                      </TableCell>
-                      <TableCell>{formatCurrency(record.total_income)}</TableCell>
-                      <TableCell>{formatCurrency(record.deductions)}</TableCell>
-                      <TableCell className="font-semibold">{formatCurrency(record.net_salary)}</TableCell>
-                      <TableCell className="text-sm text-gray-500">{record.source_file}</TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-
-              {payrolls.length === 0 && (
-                <div className="text-center py-8 text-gray-500">
-                  Chưa có dữ liệu lương nào. Hãy upload file Excel để bắt đầu.
-                </div>
-              )}
-            </div>
-          </CardContent>
-        </Card>
+          </TabsContent>
+        </Tabs>
       </div>
     </div>
   )
